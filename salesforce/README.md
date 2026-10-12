@@ -14,7 +14,7 @@ Claude's error messages are generic. The same message can have more than one cau
 
 ## 60-second checklist
 
-1. **Check the saved URL.** Open the connector in Claude. Read the saved URL one character at a time. A wrong path gives the same generic errors as a real server problem. (CONFIRMED)
+1. **Check the saved URL.** Open the connector in Claude (in October 2026: Customize > Connectors > Yours). Read the saved URL one character at a time. A wrong path gives the same generic errors as a real server problem. (CONFIRMED)
 2. **Use your own OAuth client.** The connector must use "Use your own OAuth client" with your External Client App's Consumer Key. Claude pre-selects "Register automatically (DCR)", and Salesforce rejects it. (CONFIRMED)
 3. **Turn on JWT-based access tokens.** In the External Client App, tick "Issue JSON Web Token (JWT)-based access tokens for named users". A new app has it off. (CONFIRMED)
 4. **Check callback and scopes.** Callback `https://claude.ai/api/mcp/auth_callback`. Scopes "Access Salesforce hosted MCP servers (mcp_api)" and "Perform requests at any time (refresh_token, offline_access)". (CONFIRMED as part of our working setup)
@@ -23,11 +23,20 @@ Claude's error messages are generic. The same message can have more than one cau
 7. **Reconnect after every change.** In Claude, click Disconnect, then Connect. (CONFIRMED)
 8. **Read Login History.** Setup > Login History, filtered to your app, around the time you tried. "Failed: ..." means the token exchange failed. "Success" means Salesforce issued a token and the failure came later. (REPORTED in anthropics/claude-ai-mcp#1070 and in a comment on anthropics/claude-ai-mcp#1102. We CONFIRMED that "Success" rows appear while Claude still shows an error.)
 
+
+![Salesforce Login History rows showing Remote Access 2.0 Success for Claude MCP Test](images/08-login-history-success.jpg)
+
+*Login History during our failing runs: "Remote Access 2.0", "Success", app "Claude MCP Test". Usernames and source IPs hidden. (CONFIRMED, 12 Oct 2026)*
+
 ## Working baseline (CONFIRMED, 12 Oct 2026)
 
 This exact setup connected and listed tools.
 
 ### External Client App
+![External Client App Manager in Salesforce Setup](images/10-eca-manager-new-app.jpg)
+
+*Setup > External Client App Manager > New External Client App.*
+
 
 | Setting | Value |
 |---|---|
@@ -39,6 +48,16 @@ This exact setup connected and listed tools.
 | Issue JWT-based access tokens for named users | **On** (default is off) |
 | App Authorization / Permitted users | All users can self-authorize |
 
+
+![Callback URL and OAuth scopes in the External Client App](images/04-eca-callback-and-scopes.jpg)
+
+*Callback https://claude.ai/api/mcp/auth_callback and the two scopes: mcp_api and refresh_token. (CONFIRMED, 12 Oct 2026)*
+
+
+![Security settings with JWT-based access tokens ticked](images/03b-eca-security-jwt-on.jpg)
+
+*Security section of our working app. The red box is the setting a new app leaves off. PKCE, refresh token rotation and the 30-day idle limit are locked on. (CONFIRMED, 12 Oct 2026)*
+
 Where the JWT setting lives: External Client App > Settings > Edit > OAuth Settings > Security.
 
 To copy the Consumer Key, Salesforce asks you to verify your identity with an email code. (CONFIRMED)
@@ -47,6 +66,16 @@ To copy the Consumer Key, Salesforce asks you to verify your identity with an em
 
 - Setup > Integrations > API Catalog > MCP Servers listed 16 servers in our org. All were Inactive. (CONFIRMED)
 - We activated **SObject Reads** and **Headless360 (H360)**. (CONFIRMED)
+
+
+![MCP Servers list in Salesforce Setup, all inactive, with the Flex Credits banner](images/05-mcp-servers-list.jpg)
+
+*API Catalog > MCP Servers in a new Developer Edition org: every server Inactive, and the Flex Credits banner. (CONFIRMED, 12 Oct 2026)*
+
+
+![Headless360 MCP server page after activation, showing the Beta notice](images/06-h360-activated-beta.jpg)
+
+*Headless360 (H360) after Activate. Note the Beta Services notice and the Server URL under Authentication Details. (CONFIRMED, 12 Oct 2026)*
 - H360 is marked Beta. Activating it accepts Salesforce's Beta Services Terms. Read them before you click. (CONFIRMED that the page says so)
 - We do not yet know whether a connector to SObject Reads alone works without H360 active. (UNTESTED)
 
@@ -59,7 +88,22 @@ To copy the Consumer Key, Salesforce asks you to verify your identity with an em
 | Client ID | The External Client App's Consumer Key |
 | Client secret | Empty |
 
+
+![Claude Add custom connector dialog, OAuth client choices](images/02-oauth-client-options.jpg)
+
+*The OAuth client choice in Claude's Add custom connector dialog. Claude pre-selects "Register automatically" (DCR), marked "Detected". For Salesforce, pick "Use your own OAuth client". (CONFIRMED, 12 Oct 2026)*
+
 Result: "Connected to Salesforce H360 (test)." Claude listed 5 tools: one interactive, three read-only, one write/delete. All defaulted to "Needs approval". (CONFIRMED)
+
+
+![Salesforce Allow Access screen for the External Client App](images/07-salesforce-allow-access.jpg)
+
+*The Salesforce consent screen on first connect. It lists "Access the identity URL service" even though only mcp_api and refresh_token were configured. Username hidden. (CONFIRMED, 12 Oct 2026)*
+
+
+![Claude connector page showing Salesforce H360 connected with its tools](images/09-connected-h360-tools.jpg)
+
+*What working looks like: Disconnect button plus a tool list. (CONFIRMED, 12 Oct 2026)*
 
 Hosted MCP works on a free Developer Edition org. (CONFIRMED)
 
@@ -74,6 +118,11 @@ In each message below, `<name>` is your connector's name. Claude ends most messa
 Full text: "Couldn't register with `<name>`'s sign-in service. You can try again, or add an OAuth Client ID in the connector settings."
 
 - **Cause:** the connector uses Claude's default OAuth client choice, "Register automatically (DCR)". Claude pre-selects it and marks it "Detected" for the Salesforce URL. Salesforce does not register the client. (CONFIRMED)
+
+
+![Claude showing the Couldn't register error](images/01-dcr-couldnt-register.jpg)
+
+*The "Couldn't register" error with DCR. This connector also had a typo in its URL (sobject-eads); the error comes before any MCP call, so the typo did not cause it. Support reference blurred. (CONFIRMED, 12 Oct 2026)*
 - **Fix:** remove the connector. Add it again with "Use your own OAuth client" and paste the Consumer Key. (CONFIRMED: with this choice the Salesforce sign-in went through, and our working setup uses it.)
 - On Claude Team and Enterprise, only an Owner can add the client ID. (REPORTED in anthropics/claude-ai-mcp#1114)
 
@@ -82,6 +131,11 @@ Full text: "Couldn't register with `<name>`'s sign-in service. You can try again
 Full text: "Authorization with `<name>` failed. You can check your credentials and permissions."
 
 The connector page may also show a **Disconnect** button, so it looks connected, plus "This connector has no tools available."
+
+
+![Claude showing Authorization failed and no tools available](images/11-jwt-off-authorization-failed.jpg)
+
+*JWT-based tokens turned off, then Disconnect and Connect: the page shows Disconnect, so it looks connected, but "This connector has no tools available", and the toast says "Authorization ... failed". Recaptured 12 Oct 2026; turning JWT back on fixed it again. Support reference blurred. (CONFIRMED)*
 
 - **Cause 1: the app issues opaque tokens.** "Issue JSON Web Token (JWT)-based access tokens for named users" is off. (CONFIRMED. We turned it off and got this error. We turned it on and it connected. We did both directions.)
   - **Fix:** External Client App > Settings > Edit > OAuth Settings > Security > tick the JWT setting > Save. In Claude, Disconnect, then Connect. (CONFIRMED)
