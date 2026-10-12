@@ -1,42 +1,83 @@
 # Claude + Salesforce hosted MCP: fix "Authorization failed" and other connector errors (tested Oct 2026)
 
-This guide is for admins who added Salesforce's hosted MCP server to Claude as a custom connector and got an error.
+I tested all of this on 12 October 2026 with one free Salesforce Developer Edition org, claude.ai in a browser and a Claude Max account. I did not test sandboxes, production orgs, Claude Team or Enterprise owner flows, or Claude Desktop.
 
-**What we tested.** One free Salesforce Developer Edition org, claude.ai in a browser, a Claude Max account, on 12 October 2026. We did not test sandboxes, production orgs, Claude Team or Enterprise owner flows, or Claude Desktop.
+Claude's errors are generic and one message can have several causes. Below, `<name>` is your connector's name. Most messages end with "If this persists, share this reference with support: ofid_...". Keep that reference and the time you tried. In my screenshots I blurred support references and hid usernames and source IPs.
 
-**Labels used on every claim.**
+## If you're seeing one of these
 
-- **CONFIRMED**: we saw it in our own live test on 12 Oct 2026.
-- **REPORTED**: someone reported this fix in a public GitHub issue on `anthropics/claude-ai-mcp`. The issue number is given. We did not test it.
-- **UNTESTED**: plausible, but nobody has shown it to us.
+### Couldn't register
 
-Claude's error messages are generic. The same message can have more than one cause. Work through the checklist in order.
+"Couldn't register with `<name>`'s sign-in service. You can try again, or add an OAuth Client ID in the connector settings."
 
-## 60-second checklist
+Claude pre-selects "Register automatically (DCR)" for the Salesforce URL and marks it "Detected". Salesforce does not register the client. Remove the connector, add it again with "Use your own OAuth client" and paste your External Client App's Consumer Key. That got me through the Salesforce sign-in.
 
-1. **Check the saved URL.** Open the connector in Claude (in October 2026: Customize > Connectors > Yours). Read the saved URL one character at a time. A wrong path gives the same generic errors as a real server problem. (CONFIRMED)
-2. **Use your own OAuth client.** The connector must use "Use your own OAuth client" with your External Client App's Consumer Key. Claude pre-selects "Register automatically (DCR)", and Salesforce rejects it. (CONFIRMED)
-3. **Turn on JWT-based access tokens.** In the External Client App, tick "Issue JSON Web Token (JWT)-based access tokens for named users". A new app has it off. (CONFIRMED)
-4. **Check callback and scopes.** Callback `https://claude.ai/api/mcp/auth_callback`. Scopes "Access Salesforce hosted MCP servers (mcp_api)" and "Perform requests at any time (refresh_token, offline_access)". (CONFIRMED as part of our working setup)
-5. **Leave "Require secret" off** for the Web Server Flow and the Refresh Token Flow, unless you also paste the secret in Claude. Our working setup had both off. (CONFIRMED both ways on 12 Oct 2026: with "Require secret for Web Server Flow" on and no secret in Claude, sign-in failed and Login History showed "Failed: Missing Consumer Key Parameter".)
-6. **Activate the server** named in your URL: Setup > Integrations > API Catalog > MCP Servers. All servers are inactive in a new org. (CONFIRMED. With H360 deactivated, our H360 connector gave "Your account was authorized, but `<name>` returned an error when connecting", the same message as a URL typo.)
-7. **Reconnect after every change, and wait a few minutes first.** In Claude, click Disconnect, then Connect. (CONFIRMED) In our test, an External Client App change saved one minute earlier had not taken effect yet, while the same change tested eight minutes later had. (CONFIRMED once; the exact delay is UNTESTED)
-8. **Read Login History.** Setup > Login History, filtered to your app, around the time you tried. "Failed: ..." means the token exchange failed. "Success" means Salesforce issued a token and the failure came later. (REPORTED in anthropics/claude-ai-mcp#1070 and in a comment on anthropics/claude-ai-mcp#1102. We CONFIRMED that "Success" rows appear while Claude still shows an error.)
+![Claude showing the Couldn't register error](images/01-dcr-couldnt-register.jpg)
 
+*The DCR error.*
+
+That connector also had a URL typo (sobject-eads), but the error comes before any MCP call, so the typo didn't cause it. Someone in anthropics/claude-ai-mcp#1114 says only an Owner can add the client ID on Claude Team and Enterprise. I haven't tested that.
+
+### Authorization failed, no tools
+
+"Authorization with `<name>` failed. You can check your credentials and permissions." The connector page may show a Disconnect button, so it looks connected, plus "This connector has no tools available."
+
+My cause was "Issue JSON Web Token (JWT)-based access tokens for named users" being off. A new External Client App has it off and issues opaque tokens. I turned it off and got this error; I turned it on and it connected. Fix: External Client App > Settings > Edit > OAuth Settings > Security, tick the JWT setting, Save. Then Disconnect and Connect in Claude.
+
+![Claude showing Authorization failed and no tools available](images/11-jwt-off-authorization-failed.jpg)
+
+*Recaptured with JWT off on 12 Oct 2026, and turning it back on fixed it again.*
+
+I reproduced a second cause too: "Require secret" on while Claude has no client secret. Login History shows "Failed: Missing Consumer Key Parameter", and the connector page may say "Your connection to `<name>` stopped working" instead of "no tools available". It was first reported in anthropics/claude-ai-mcp#1070. Untick "Require secret for Web Server Flow" and "Require secret for Refresh Token Flow", keep PKCE, wait a few minutes, then Disconnect and Connect.
+
+![Salesforce Login History showing Failed: Missing Consumer Key Parameter](images/15-login-history-missing-consumer-key.jpg)
+
+*Login History with "Require secret" on.*
+
+I also got this message once with a mistyped URL path, but JWT was off in that run as well, so I can't say which fault caused it. Check the URL anyway.
+
+The older wording was "Your account was authorized, but the integration rejected the credentials it just issued." Anthropic traced it to opaque tokens in anthropics/claude-ai-mcp#1093. I saw the newer wording in October.
+
+### Authorized, but returned an error
+
+"Your account was authorized, but `<name>` returned an error when connecting. You can try again, or check that the server is working." The connector page then shows "Connection issue. Couldn't connect to the server. Check that the URL points to a valid MCP server."
+
+I got this pair from two faults. One was a wrong URL path, twice: `sobject-eads` (missing "r") and `headless360` (missing "-"), with JWT on both times. Remove the connector, add it again with the exact URL, then re-read the saved URL on the connector page.
+
+The other was an inactive server. I deactivated Headless360 (H360), disconnected and connected my H360 connector, and got the same pair. Reactivating it fixed it: Setup > Integrations > API Catalog > MCP Servers, open the server, Activate, reconnect. Users of the "Salesforce - Beta" directory connector report the same fix (activate H360) in anthropics/claude-ai-mcp#933 and anthropics/claude-ai-mcp#495.
+
+![Claude showing Connection issue after the server was deactivated](images/12-h360-inactive-couldnt-connect.jpg)
+
+*H360 deactivated, which looks the same as a URL typo.*
+
+A third cause I haven't tested is the server not being active for the org, or the user lacking MCP access. Anthropic traced older reports, with older wording, to Salesforce answering 404 or 405 on the first MCP call (anthropics/claude-ai-mcp#251 and anthropics/claude-ai-mcp#328).
+
+## Checklist
+
+If none of that matches, go through these in order.
+
+1. Open the connector in Claude (in October 2026, Customize > Connectors > Yours) and read the saved URL one character at a time.
+2. Check the connector uses "Use your own OAuth client" with your Consumer Key. Salesforce rejects the DCR option.
+3. Tick "Issue JSON Web Token (JWT)-based access tokens for named users" in the External Client App.
+4. Set the callback to `https://claude.ai/api/mcp/auth_callback` and the scopes to "Access Salesforce hosted MCP servers (mcp_api)" and "Perform requests at any time (refresh_token, offline_access)".
+5. Leave "Require secret" off for the Web Server Flow and the Refresh Token Flow, unless you also paste the secret in Claude.
+6. Activate the server named in your URL under Setup > Integrations > API Catalog > MCP Servers. All are inactive in a new org.
+7. Wait a few minutes after a change, then Disconnect and Connect in Claude.
+8. Read Setup > Login History, filtered to your app, around the time you tried. "Failed: ..." means the token exchange failed; "Success" means Salesforce issued a token and the failure came later.
+
+Step 8 comes from anthropics/claude-ai-mcp#1070 and a comment on anthropics/claude-ai-mcp#1102. I did see "Success" rows while Claude still showed an error.
 
 ![Salesforce Login History rows showing Remote Access 2.0 Success for Claude MCP Test](images/08-login-history-success.jpg)
 
-*Login History during our failing runs: "Remote Access 2.0", "Success", app "Claude MCP Test". Usernames and source IPs hidden. (CONFIRMED, 12 Oct 2026)*
+*Login History during my failing runs: "Remote Access 2.0", "Success", app "Claude MCP Test".*
 
-## Working baseline (CONFIRMED, 12 Oct 2026)
-
-This exact setup connected and listed tools.
+## The setup that worked for me
 
 ### External Client App
+
 ![External Client App Manager in Salesforce Setup](images/10-eca-manager-new-app.jpg)
 
 *Setup > External Client App Manager > New External Client App.*
-
 
 | Setting | Value |
 |---|---|
@@ -45,39 +86,32 @@ This exact setup connected and listed tools.
 | Require PKCE | On (locked on a new app) |
 | Require secret for Web Server Flow | Off (the default) |
 | Require secret for Refresh Token Flow | Off (the default) |
-| Issue JWT-based access tokens for named users | **On** (default is off) |
+| Issue JWT-based access tokens for named users | On (default is off) |
 | App Authorization / Permitted users | All users can self-authorize |
-
 
 ![Callback URL and OAuth scopes in the External Client App](images/04-eca-callback-and-scopes.jpg)
 
-*Callback https://claude.ai/api/mcp/auth_callback and the two scopes: mcp_api and refresh_token. (CONFIRMED, 12 Oct 2026)*
-
+*The callback and the two scopes.*
 
 ![Security settings with JWT-based access tokens ticked](images/03b-eca-security-jwt-on.jpg)
 
-*Security section of our working app. The red box is the setting a new app leaves off. PKCE, refresh token rotation and the 30-day idle limit are locked on. (CONFIRMED, 12 Oct 2026)*
+*The red box is the setting a new app leaves off.*
 
-Where the JWT setting lives: External Client App > Settings > Edit > OAuth Settings > Security.
-
-To copy the Consumer Key, Salesforce asks you to verify your identity with an email code. (CONFIRMED)
+PKCE, refresh token rotation and the 30-day idle limit are locked on. Salesforce made me verify my identity with an email code before I could copy the Consumer Key.
 
 ### MCP servers
 
-- Setup > Integrations > API Catalog > MCP Servers listed 16 servers in our org. All were Inactive. (CONFIRMED)
-- We activated **SObject Reads** and **Headless360 (H360)**. (CONFIRMED)
-
+API Catalog > MCP Servers listed 16 servers in my org, all Inactive. I activated SObject Reads and Headless360 (H360).
 
 ![MCP Servers list in Salesforce Setup, all inactive, with the Flex Credits banner](images/05-mcp-servers-list.jpg)
 
-*API Catalog > MCP Servers in a new Developer Edition org: every server Inactive, and the Flex Credits banner. (CONFIRMED, 12 Oct 2026)*
-
+*In a new org every server starts Inactive. The Flex Credits banner sits on top.*
 
 ![Headless360 MCP server page after activation, showing the Beta notice](images/06-h360-activated-beta.jpg)
 
-*Headless360 (H360) after Activate. Note the Beta Services notice and the Server URL under Authentication Details. (CONFIRMED, 12 Oct 2026)*
-- H360 is marked Beta. Activating it accepts Salesforce's Beta Services Terms. Read them before you click. (CONFIRMED that the page says so)
-- We do not yet know whether a connector to SObject Reads alone works without H360 active. (UNTESTED)
+*The H360 page after Activate, with the Beta Services notice. The Server URL is under Authentication Details.*
+
+H360 is marked Beta, and the page says activating it accepts Salesforce's Beta Services Terms. Read them before you click. I don't know yet whether SObject Reads alone works without H360 active.
 
 ### Claude connector
 
@@ -88,157 +122,99 @@ To copy the Consumer Key, Salesforce asks you to verify your identity with an em
 | Client ID | The External Client App's Consumer Key |
 | Client secret | Empty |
 
-
 ![Claude Add custom connector dialog, OAuth client choices](images/02-oauth-client-options.jpg)
 
-*The OAuth client choice in Claude's Add custom connector dialog. Claude pre-selects "Register automatically" (DCR), marked "Detected". For Salesforce, pick "Use your own OAuth client". (CONFIRMED, 12 Oct 2026)*
+*Claude marks DCR "Detected"; pick "Use your own OAuth client".*
 
-Result: "Connected to Salesforce H360 (test)." Claude listed 5 tools: one interactive, three read-only, one write/delete. All defaulted to "Needs approval". (CONFIRMED)
-
+Salesforce's consent screen listed "Access the identity URL service" although I had only configured mcp_api and refresh_token.
 
 ![Salesforce Allow Access screen for the External Client App](images/07-salesforce-allow-access.jpg)
 
-*The Salesforce consent screen on first connect. It lists "Access the identity URL service" even though only mcp_api and refresh_token were configured. Username hidden. (CONFIRMED, 12 Oct 2026)*
+*The consent screen on first connect.*
 
+Claude then said "Connected to Salesforce H360 (test)." and listed 5 tools: one interactive, three read-only, one write/delete. All defaulted to "Needs approval". So hosted MCP works on a free Developer Edition org.
 
 ![Claude connector page showing Salesforce H360 connected with its tools](images/09-connected-h360-tools.jpg)
 
-*What working looks like: Disconnect button plus a tool list. (CONFIRMED, 12 Oct 2026)*
+*Working looks like a Disconnect button plus a tool list.*
 
-Hosted MCP works on a free Developer Edition org. (CONFIRMED)
-
-A read-only tool call works end to end: in a chat, Claude asked to use "Discover APIs" and then "Dispatch read-only API" (GET `/services/data/v66.0/sobjects/Account/describe`), each needing "Allow once", and returned the Account object's fields. (CONFIRMED, 12 Oct 2026)
+In a chat Claude asked to use "Discover APIs" and then "Dispatch read-only API" (GET `/services/data/v66.0/sobjects/Account/describe`), each needing "Allow once", and returned the Account object's fields.
 
 ![Claude chat answer after a read-only Salesforce tool call](images/13-tool-call-account-describe.jpg)
 
-*A read-only tool call in chat: Account describe returned 200 and nothing was changed. (CONFIRMED, 12 Oct 2026)*
+*Account describe returned 200 and nothing was changed.*
 
-What this baseline does not prove: we did not test the `sobject-reads` or `sobject-all` URLs with the exact path. (UNTESTED)
+I didn't test the `sobject-reads` or `sobject-all` URLs with the exact path.
 
-## Errors, causes and fixes
-
-In each message below, `<name>` is your connector's name. Claude ends most messages with "If this persists, share this reference with support: ofid_...". Keep that reference and the time of the attempt.
-
-### "Couldn't register with `<name>`'s sign-in service"
-
-Full text: "Couldn't register with `<name>`'s sign-in service. You can try again, or add an OAuth Client ID in the connector settings."
-
-- **Cause:** the connector uses Claude's default OAuth client choice, "Register automatically (DCR)". Claude pre-selects it and marks it "Detected" for the Salesforce URL. Salesforce does not register the client. (CONFIRMED)
-
-
-![Claude showing the Couldn't register error](images/01-dcr-couldnt-register.jpg)
-
-*The "Couldn't register" error with DCR. This connector also had a typo in its URL (sobject-eads); the error comes before any MCP call, so the typo did not cause it. Support reference blurred. (CONFIRMED, 12 Oct 2026)*
-- **Fix:** remove the connector. Add it again with "Use your own OAuth client" and paste the Consumer Key. (CONFIRMED: with this choice the Salesforce sign-in went through, and our working setup uses it.)
-- On Claude Team and Enterprise, only an Owner can add the client ID. (REPORTED in anthropics/claude-ai-mcp#1114)
-
-### "Authorization with `<name>` failed"
-
-Full text: "Authorization with `<name>` failed. You can check your credentials and permissions."
-
-The connector page may also show a **Disconnect** button, so it looks connected, plus "This connector has no tools available."
-
-
-![Claude showing Authorization failed and no tools available](images/11-jwt-off-authorization-failed.jpg)
-
-*JWT-based tokens turned off, then Disconnect and Connect: the page shows Disconnect, so it looks connected, but "This connector has no tools available", and the toast says "Authorization ... failed". Recaptured 12 Oct 2026; turning JWT back on fixed it again. Support reference blurred. (CONFIRMED)*
-
-- **Cause 1: the app issues opaque tokens.** "Issue JSON Web Token (JWT)-based access tokens for named users" is off. (CONFIRMED. We turned it off and got this error. We turned it on and it connected. We did both directions.)
-  - **Fix:** External Client App > Settings > Edit > OAuth Settings > Security > tick the JWT setting > Save. In Claude, Disconnect, then Connect. (CONFIRMED)
-- **Cause 2: wrong URL path.** We saw this same message once with a mistyped path. JWT was also off in that run, so we cannot say which fault caused it. (Seen, cause UNTESTED) Check the URL anyway.
-- **Cause 3: "Require secret" is on** and Claude has no client secret. Login History shows "Failed: Missing Consumer Key Parameter". The connector page may say "Your connection to `<name>` stopped working" instead of "no tools available". (CONFIRMED, 12 Oct 2026; first reported in anthropics/claude-ai-mcp#1070)
-  - **Fix:** untick "Require secret for Web Server Flow" and "Require secret for Refresh Token Flow", keep PKCE, wait a few minutes, then Disconnect and Connect. (CONFIRMED)
-
-![Salesforce Login History showing Failed: Missing Consumer Key Parameter](images/15-login-history-missing-consumer-key.jpg)
-
-*Login History with "Require secret" on: "Failed: Missing Consumer Key Parameter". Username and IP columns left out. (CONFIRMED, 12 Oct 2026)*
-
-- **Cause 4: the Platform Integration User lost `C2CMcpServicePermSet`.** Fix: restore that permission set. (REPORTED in anthropics/claude-ai-mcp#495)
-- **Cause 5: the user is not allowed into the app.** The policy is "Admin approved users are pre-authorized" and the user is not assigned. Fix: assign the user through a profile or permission set, or use self-authorize. (REPORTED in forcedotcom/mcp-hosted#12. Anthropic suggested per-user access for new users in anthropics/claude-ai-mcp#839.)
-- **Cause 6: wrong scope.** The app has `api` or "Full" instead of `mcp_api`. (REPORTED in anthropics/claude-ai-mcp#184 and anthropics/claude-ai-mcp#1070)
-
-Older wording of the same failure: "Your account was authorized, but the integration rejected the credentials it just issued." Anthropic traced that message to opaque tokens in anthropics/claude-ai-mcp#1093. (REPORTED) We saw the newer wording in October.
-
-### "Your account was authorized, but `<name>` returned an error when connecting"
-
-Full text: "Your account was authorized, but `<name>` returned an error when connecting. You can try again, or check that the server is working."
-
-The connector page then shows "Connection issue. Couldn't connect to the server. Check that the URL points to a valid MCP server."
-
-- **Cause 1: wrong URL path.** We got this exact pair twice, once for `sobject-eads` (missing "r") and once for `headless360` (missing "-"). JWT was on both times. (CONFIRMED)
-  - **Fix:** remove the connector and add it again with the exact URL. Then open the connector page and re-read the saved URL. (CONFIRMED that the connector page shows the saved URL.)
-- **Cause 2: the server in your URL is inactive.** We deactivated Headless360 (H360), then disconnected and connected our H360 connector: this exact pair of messages. Reactivating it fixed it. (CONFIRMED, 12 Oct 2026)
-  - **Fix:** Setup > Integrations > API Catalog > MCP Servers > open the server > Activate. Then reconnect.
-  - Users of the "Salesforce - Beta" directory connector report the same fix: activate H360. (REPORTED in anthropics/claude-ai-mcp#933 and anthropics/claude-ai-mcp#495)
-
-![Claude showing Connection issue after the server was deactivated](images/12-h360-inactive-couldnt-connect.jpg)
-
-*H360 deactivated in Salesforce: "Your account was authorized, but ... returned an error when connecting" and "Connection issue". A URL typo gives the same screen. Support reference blurred. (CONFIRMED, 12 Oct 2026)*
-
-- **Cause 3: the server is not active for this org, or the user lacks MCP access.** Anthropic traced older reports to Salesforce answering 404 or 405 on the first MCP call. Those reports showed older error wording. (REPORTED in anthropics/claude-ai-mcp#251 and anthropics/claude-ai-mcp#328)
+## Rarer errors
 
 ### "Your connection to `<name>` stopped working. Reconnect to continue."
 
-Cause we confirmed: "Require secret for Web Server Flow" is on and Claude has no secret. The toast says "Authorization with `<name>` failed", and Login History shows "Failed: Missing Consumer Key Parameter". (CONFIRMED, 12 Oct 2026)
+I got this from the "Require secret" fault above, with an "Authorization with `<name>` failed" toast and "Failed: Missing Consumer Key Parameter" in Login History.
 
 ![Claude showing Your connection stopped working](images/14-require-secret-on-stopped-working.jpg)
 
-*"Require secret" on, no secret in Claude. Support reference blurred. (CONFIRMED, 12 Oct 2026)*
+*"Require secret" on with no secret in Claude.*
 
-We also saw this page once in a run with a URL typo, an inactive server and JWT off, so it has more than one cause. Check Login History first, then run the whole checklist.
+I also saw it once in a run with a URL typo, an inactive server and JWT off together. Check Login History, then run the whole checklist.
+
+### Other reported causes of "Authorization failed"
+
+I haven't tested these.
+
+- The Platform Integration User lost `C2CMcpServicePermSet`. Restore it (anthropics/claude-ai-mcp#495).
+- The policy is "Admin approved users are pre-authorized" and the user isn't assigned. Assign them through a profile or permission set, or use self-authorize (forcedotcom/mcp-hosted#12). Anthropic suggested per-user access for new users in anthropics/claude-ai-mcp#839.
+- The app has `api` or "Full" instead of `mcp_api` (anthropics/claude-ai-mcp#184, anthropics/claude-ai-mcp#1070).
 
 ### OAUTH_APPROVAL_ERROR_GENERIC on the Salesforce approval screen
 
-- **Cause:** the app's scopes are wrong, for example only "Full". (REPORTED in a comment on anthropics/claude-ai-mcp#1070, and in anthropics/claude-ai-mcp#527)
-- **Fix:** set the scopes to `mcp_api` and `refresh_token`. (Our working scopes are CONFIRMED. That this clears the approval error is REPORTED.)
+A comment on anthropics/claude-ai-mcp#1070, and anthropics/claude-ai-mcp#527, blame wrong scopes such as only "Full" and say `mcp_api` and `refresh_token` fix it. Those are my working scopes, but I haven't seen them clear this error.
 
 ### "Couldn't reach the MCP server"
 
-- **Cause:** the saved URL had a stray character at the end, a trailing backtick in one case. (REPORTED in anthropics/claude-ai-mcp#246)
-- **Fix:** remove and re-add the connector with a clean URL.
+In anthropics/claude-ai-mcp#246 the saved URL had a stray character at the end, in one case a trailing backtick. Remove and re-add the connector with a clean URL.
 
 ### `invalid_client_id` at test.salesforce.com (sandbox)
 
-- A sandbox with Enhanced Domains is sent to the legacy test.salesforce.com login and fails there. (REPORTED in anthropics/claude-ai-mcp#986, still open, no fix in the thread)
-- Sandbox URLs use a `/sandbox/` path segment, and each URL path needs its own Consumer Key. (REPORTED in anthropics/claude-ai-mcp#246 and anthropics/claude-ai-mcp#1114)
-- We could not test sandboxes. (UNTESTED)
+I couldn't test sandboxes. In anthropics/claude-ai-mcp#986, still open with no fix in the thread, a sandbox with Enhanced Domains is sent to the legacy test.salesforce.com login and fails. Sandbox URLs use a `/sandbox/` path segment, and each URL path needs its own Consumer Key (anthropics/claude-ai-mcp#246, anthropics/claude-ai-mcp#1114).
 
 ### Connected, but tool calls fail
 
-- "UNKNOWN_EXCEPTION" on queries: High Assurance session security on the user's profile. Fix: remove it from the profile and grant it through a permission set. (REPORTED in anthropics/claude-ai-mcp#329)
-- "Unexpected error while invoking tool" across many users at once: one case was a Salesforce incident. (REPORTED in a comment on anthropics/claude-ai-mcp#782)
+Two reports I haven't tested. "UNKNOWN_EXCEPTION" on queries came from High Assurance session security on the user's profile; remove it from the profile and grant it through a permission set (anthropics/claude-ai-mcp#329). "Unexpected error while invoking tool" across many users at once was a Salesforce incident in one case (a comment on anthropics/claude-ai-mcp#782).
 
-### "Authentication required to use this tool", or you sign in again every week
+### "Authentication required to use this tool", or signing in every week
 
-- **Fix:** set the app's Refresh Token Policy to "valid until revoked". (REPORTED by Anthropic in anthropics/claude-ai-mcp#198)
+Anthropic says to set the app's Refresh Token Policy to "valid until revoked" (anthropics/claude-ai-mcp#198). I haven't tried it.
 
 ### "A server with this URL already exists"
 
-- Claude allows one custom connector per URL. You cannot add two orgs with the same URL. (REPORTED in anthropics/claude-ai-mcp#614 and anthropics/claude-ai-mcp#178, both open)
+Claude allows one custom connector per URL, so two orgs can't share one (anthropics/claude-ai-mcp#614 and anthropics/claude-ai-mcp#178, both open).
 
-## Check the URL first
+## Things that surprised me
 
-A wrong path does not give a "not found" message. In our test it gave the same generic errors as a server problem. Salesforce still showed "Success" sign-ins in Login History. (CONFIRMED)
+### A wrong URL path looks like a server problem
 
-- Production-style paths look like `https://api.salesforce.com/platform/mcp/v1/platform/<server>`. Copy the server URL from the server's detail page in Setup. (CONFIRMED for H360)
-- Paths are case-sensitive. (REPORTED in a comment on anthropics/claude-ai-mcp#556)
-- Watch for a trailing space or backtick. (REPORTED in anthropics/claude-ai-mcp#184 and anthropics/claude-ai-mcp#246)
-- If you remove a connector and add it again, re-read the saved URL. One report says Claude brought back the old record with the old URL. (REPORTED in anthropics/claude-ai-mcp#556)
+A wrong path never gave me "not found". I got the same generic errors as a server problem, and Login History still showed "Success" sign-ins.
 
-## You cannot edit the OAuth client after adding
+- Production-style paths look like `https://api.salesforce.com/platform/mcp/v1/platform/<server>`. Copy the URL from the server's detail page in Setup, as I did for H360.
+- Paths are case-sensitive, says a comment on anthropics/claude-ai-mcp#556.
+- Watch for a trailing space or backtick (anthropics/claude-ai-mcp#184, anthropics/claude-ai-mcp#246).
+- After you remove and re-add a connector, re-read the saved URL. A report in anthropics/claude-ai-mcp#556 says Claude brought back the old record with the old URL.
 
-The connector's ⋮ menu offers only "Remove". You cannot switch the OAuth client choice or the client ID later. (CONFIRMED) To change it, remove the connector and add it again. Anthropic's maintainers gave the same advice in anthropics/claude-ai-mcp#1114. (REPORTED)
+### Settings take a few minutes
 
-## "Enable MCP Service" in Anthropic's doc
+An External Client App change I saved one minute earlier hadn't taken effect, and the same change tested eight minutes later had. I saw this once, so I don't know the exact delay.
 
-Step 1 of Anthropic's Salesforce connector doc says to turn on "Enable MCP Service". We could not find a setting by that name in our org in October 2026. Setup search and the User Interface page showed nothing for "MCP Service". Activation happened per server, under API Catalog > MCP Servers. (CONFIRMED for our Developer Edition org. Other editions: UNTESTED.)
+### I couldn't find "Enable MCP Service"
 
-The same doc uses the callback `http://127.0.0.1:53280/callback`. That one is for Claude Desktop managed configuration. For a connector added on claude.ai, our working callback was `https://claude.ai/api/mcp/auth_callback`. (CONFIRMED)
+Step 1 of Anthropic's Salesforce connector doc says to turn on "Enable MCP Service". I couldn't find a setting by that name in my Developer Edition org in October 2026. Setup search and the User Interface page showed nothing for "MCP Service". Activation happened per server under API Catalog > MCP Servers. I haven't checked other editions.
 
-## The Flex Credits banner
+The same doc's callback, `http://127.0.0.1:53280/callback`, is for Claude Desktop managed configuration. On claude.ai my working callback was `https://claude.ai/api/mcp/auth_callback`.
 
-After you activate a server, the MCP Servers page shows: "You might be billed for Salesforce MCP server usage. Learn about Flex Credits." (CONFIRMED) We do not know what a Developer Edition or production org is charged. (UNTESTED) Check your Salesforce contract before a wide rollout.
+### The Flex Credits banner
 
-## Still stuck?
+Once a server is active, the MCP Servers page says "You might be billed for Salesforce MCP server usage. Learn about Flex Credits." I don't know what a Developer Edition or production org is charged, so check your Salesforce contract before a wide rollout.
 
-ComplyEaze fixes these for a fixed fee, no fix no fee: Tapish Khandelwal, tapish@complyeaze.com
+### Connectors are under Customize > Connectors > Yours, and the OAuth client is fixed
+
+In October 2026 custom connectors sat under Customize > Connectors > Yours. Their ⋮ menu offers only "Remove", so I couldn't change the OAuth client choice or client ID after adding. Remove the connector and add it again. Anthropic's maintainers said the same in anthropics/claude-ai-mcp#1114.
