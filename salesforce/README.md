@@ -18,9 +18,9 @@ Claude's error messages are generic. The same message can have more than one cau
 2. **Use your own OAuth client.** The connector must use "Use your own OAuth client" with your External Client App's Consumer Key. Claude pre-selects "Register automatically (DCR)", and Salesforce rejects it. (CONFIRMED)
 3. **Turn on JWT-based access tokens.** In the External Client App, tick "Issue JSON Web Token (JWT)-based access tokens for named users". A new app has it off. (CONFIRMED)
 4. **Check callback and scopes.** Callback `https://claude.ai/api/mcp/auth_callback`. Scopes "Access Salesforce hosted MCP servers (mcp_api)" and "Perform requests at any time (refresh_token, offline_access)". (CONFIRMED as part of our working setup)
-5. **Leave "Require secret" off** for the Web Server Flow and the Refresh Token Flow, unless you also paste the secret in Claude. Our working setup had both off. (CONFIRMED that off works. That "on" breaks it is REPORTED in anthropics/claude-ai-mcp#1070.)
+5. **Leave "Require secret" off** for the Web Server Flow and the Refresh Token Flow, unless you also paste the secret in Claude. Our working setup had both off. (CONFIRMED both ways on 12 Oct 2026: with "Require secret for Web Server Flow" on and no secret in Claude, sign-in failed and Login History showed "Failed: Missing Consumer Key Parameter".)
 6. **Activate the server** named in your URL: Setup > Integrations > API Catalog > MCP Servers. All servers are inactive in a new org. (CONFIRMED. With H360 deactivated, our H360 connector gave "Your account was authorized, but `<name>` returned an error when connecting", the same message as a URL typo.)
-7. **Reconnect after every change.** In Claude, click Disconnect, then Connect. (CONFIRMED)
+7. **Reconnect after every change, and wait a few minutes first.** In Claude, click Disconnect, then Connect. (CONFIRMED) In our test, an External Client App change saved one minute earlier had not taken effect yet, while the same change tested eight minutes later had. (CONFIRMED once; the exact delay is UNTESTED)
 8. **Read Login History.** Setup > Login History, filtered to your app, around the time you tried. "Failed: ..." means the token exchange failed. "Success" means Salesforce issued a token and the failure came later. (REPORTED in anthropics/claude-ai-mcp#1070 and in a comment on anthropics/claude-ai-mcp#1102. We CONFIRMED that "Success" rows appear while Claude still shows an error.)
 
 
@@ -146,7 +146,13 @@ The connector page may also show a **Disconnect** button, so it looks connected,
 - **Cause 1: the app issues opaque tokens.** "Issue JSON Web Token (JWT)-based access tokens for named users" is off. (CONFIRMED. We turned it off and got this error. We turned it on and it connected. We did both directions.)
   - **Fix:** External Client App > Settings > Edit > OAuth Settings > Security > tick the JWT setting > Save. In Claude, Disconnect, then Connect. (CONFIRMED)
 - **Cause 2: wrong URL path.** We saw this same message once with a mistyped path. JWT was also off in that run, so we cannot say which fault caused it. (Seen, cause UNTESTED) Check the URL anyway.
-- **Cause 3: "Require secret" is on.** Login History shows "Failed: Missing Consumer Key Parameter". Fix: untick "Require secret for Web Server Flow" and "Require secret for Refresh Token Flow", keep PKCE. (REPORTED in anthropics/claude-ai-mcp#1070)
+- **Cause 3: "Require secret" is on** and Claude has no client secret. Login History shows "Failed: Missing Consumer Key Parameter". The connector page may say "Your connection to `<name>` stopped working" instead of "no tools available". (CONFIRMED, 12 Oct 2026; first reported in anthropics/claude-ai-mcp#1070)
+  - **Fix:** untick "Require secret for Web Server Flow" and "Require secret for Refresh Token Flow", keep PKCE, wait a few minutes, then Disconnect and Connect. (CONFIRMED)
+
+![Salesforce Login History showing Failed: Missing Consumer Key Parameter](images/15-login-history-missing-consumer-key.jpg)
+
+*Login History with "Require secret" on: "Failed: Missing Consumer Key Parameter". Username and IP columns left out. (CONFIRMED, 12 Oct 2026)*
+
 - **Cause 4: the Platform Integration User lost `C2CMcpServicePermSet`.** Fix: restore that permission set. (REPORTED in anthropics/claude-ai-mcp#495)
 - **Cause 5: the user is not allowed into the app.** The policy is "Admin approved users are pre-authorized" and the user is not assigned. Fix: assign the user through a profile or permission set, or use self-authorize. (REPORTED in forcedotcom/mcp-hosted#12. Anthropic suggested per-user access for new users in anthropics/claude-ai-mcp#839.)
 - **Cause 6: wrong scope.** The app has `api` or "Full" instead of `mcp_api`. (REPORTED in anthropics/claude-ai-mcp#184 and anthropics/claude-ai-mcp#1070)
@@ -173,7 +179,13 @@ The connector page then shows "Connection issue. Couldn't connect to the server.
 
 ### "Your connection to `<name>` stopped working. Reconnect to continue."
 
-We saw this once right after a successful sign-in. In that run the URL had a typo, the server was inactive and JWT was off. We cannot tell which fault caused it. (Seen, cause UNTESTED) Run the whole checklist.
+Cause we confirmed: "Require secret for Web Server Flow" is on and Claude has no secret. The toast says "Authorization with `<name>` failed", and Login History shows "Failed: Missing Consumer Key Parameter". (CONFIRMED, 12 Oct 2026)
+
+![Claude showing Your connection stopped working](images/14-require-secret-on-stopped-working.jpg)
+
+*"Require secret" on, no secret in Claude. Support reference blurred. (CONFIRMED, 12 Oct 2026)*
+
+We also saw this page once in a run with a URL typo, an inactive server and JWT off, so it has more than one cause. Check Login History first, then run the whole checklist.
 
 ### OAUTH_APPROVAL_ERROR_GENERIC on the Salesforce approval screen
 
