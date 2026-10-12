@@ -20,8 +20,8 @@ More systems will be added as we test them.
 
 If a fix here is wrong or out of date, open an issue with the error text and the date you saw it.
 
-## Contact
+## Have this error in your org?
 
-Tapish Khandelwal, tapish@complyeaze.com. I build MCP servers and fix Claude connectors for a fixed fee, no fix no fee.
+I'm Tapish Khandelwal. I fix these for a fixed price, usually within 48 hours, and you don't pay if I can't fix it. You can book it through [my Upwork offer](https://www.upwork.com/services/product/2109555434115908754), so payment is held until it works. If you'd rather ask first, open an issue here with the error text and I'll tell you what I think is wrong.
 
 Content licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).

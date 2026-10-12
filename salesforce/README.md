@@ -218,3 +218,7 @@ Once a server is active, the MCP Servers page says "You might be billed for Sale
 ### Where connectors live, and why the OAuth client is fixed
 
 In October 2026 custom connectors sat under Customize > Connectors > Yours on claude.ai, and under Settings > Connectors in Claude Desktop. Their ⋮ menu offers only "Remove", so I couldn't change the OAuth client choice or client ID after adding. Remove the connector and add it again. Anthropic's maintainers said the same in anthropics/claude-ai-mcp#1114.
+
+## If you'd rather I fix it
+
+I do this for a fixed price in your org, usually within 48 hours, and you don't pay if I can't fix it: [my Upwork offer](https://www.upwork.com/services/product/2109555434115908754). Or open an issue in this repo with the error text and I'll tell you what I think is wrong.
