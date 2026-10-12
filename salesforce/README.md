@@ -56,7 +56,7 @@ A third cause I haven't tested is the server not being active for the org, or th
 
 If none of that matches, go through these in order.
 
-1. Open the connector in Claude (in October 2026, Customize > Connectors > Yours) and read the saved URL one character at a time.
+1. Open the connector in Claude (in October 2026: Customize > Connectors > Yours on claude.ai, Settings > Connectors in Claude Desktop) and read the saved URL one character at a time.
 2. Check the connector uses "Use your own OAuth client" with your Consumer Key. Salesforce rejects the DCR option.
 3. Tick "Issue JSON Web Token (JWT)-based access tokens for named users" in the External Client App.
 4. Set the callback to `https://claude.ai/api/mcp/auth_callback` and the scopes to "Access Salesforce hosted MCP servers (mcp_api)" and "Perform requests at any time (refresh_token, offline_access)".
@@ -215,6 +215,6 @@ The same doc's callback, `http://127.0.0.1:53280/callback`, is for Claude Deskto
 
 Once a server is active, the MCP Servers page says "You might be billed for Salesforce MCP server usage. Learn about Flex Credits." I don't know what a Developer Edition or production org is charged, so check your Salesforce contract before a wide rollout.
 
-### Connectors are under Customize > Connectors > Yours, and the OAuth client is fixed
+### Where connectors live, and why the OAuth client is fixed
 
-In October 2026 custom connectors sat under Customize > Connectors > Yours. Their ⋮ menu offers only "Remove", so I couldn't change the OAuth client choice or client ID after adding. Remove the connector and add it again. Anthropic's maintainers said the same in anthropics/claude-ai-mcp#1114.
+In October 2026 custom connectors sat under Customize > Connectors > Yours on claude.ai, and under Settings > Connectors in Claude Desktop. Their ⋮ menu offers only "Remove", so I couldn't change the OAuth client choice or client ID after adding. Remove the connector and add it again. Anthropic's maintainers said the same in anthropics/claude-ai-mcp#1114.
