@@ -19,7 +19,7 @@ Claude's error messages are generic. The same message can have more than one cau
 3. **Turn on JWT-based access tokens.** In the External Client App, tick "Issue JSON Web Token (JWT)-based access tokens for named users". A new app has it off. (CONFIRMED)
 4. **Check callback and scopes.** Callback `https://claude.ai/api/mcp/auth_callback`. Scopes "Access Salesforce hosted MCP servers (mcp_api)" and "Perform requests at any time (refresh_token, offline_access)". (CONFIRMED as part of our working setup)
 5. **Leave "Require secret" off** for the Web Server Flow and the Refresh Token Flow, unless you also paste the secret in Claude. Our working setup had both off. (CONFIRMED that off works. That "on" breaks it is REPORTED in anthropics/claude-ai-mcp#1070.)
-6. **Activate the server** named in your URL: Setup > Integrations > API Catalog > MCP Servers. All servers are inactive in a new org. (CONFIRMED that they start inactive and that our working setup had them active. The error you get when a server is inactive is UNTESTED by us.)
+6. **Activate the server** named in your URL: Setup > Integrations > API Catalog > MCP Servers. All servers are inactive in a new org. (CONFIRMED. With H360 deactivated, our H360 connector gave "Your account was authorized, but `<name>` returned an error when connecting", the same message as a URL typo.)
 7. **Reconnect after every change.** In Claude, click Disconnect, then Connect. (CONFIRMED)
 8. **Read Login History.** Setup > Login History, filtered to your app, around the time you tried. "Failed: ..." means the token exchange failed. "Success" means Salesforce issued a token and the failure came later. (REPORTED in anthropics/claude-ai-mcp#1070 and in a comment on anthropics/claude-ai-mcp#1102. We CONFIRMED that "Success" rows appear while Claude still shows an error.)
 
@@ -107,7 +107,13 @@ Result: "Connected to Salesforce H360 (test)." Claude listed 5 tools: one intera
 
 Hosted MCP works on a free Developer Edition org. (CONFIRMED)
 
-What this baseline does not prove: we saw the tool list, but we did not run a tool call in a chat. (UNTESTED) We did not test the `sobject-reads` or `sobject-all` URLs with the exact path. (UNTESTED)
+A read-only tool call works end to end: in a chat, Claude asked to use "Discover APIs" and then "Dispatch read-only API" (GET `/services/data/v66.0/sobjects/Account/describe`), each needing "Allow once", and returned the Account object's fields. (CONFIRMED, 12 Oct 2026)
+
+![Claude chat answer after a read-only Salesforce tool call](images/13-tool-call-account-describe.jpg)
+
+*A read-only tool call in chat: Account describe returned 200 and nothing was changed. (CONFIRMED, 12 Oct 2026)*
+
+What this baseline does not prove: we did not test the `sobject-reads` or `sobject-all` URLs with the exact path. (UNTESTED)
 
 ## Errors, causes and fixes
 
@@ -155,7 +161,14 @@ The connector page then shows "Connection issue. Couldn't connect to the server.
 
 - **Cause 1: wrong URL path.** We got this exact pair twice, once for `sobject-eads` (missing "r") and once for `headless360` (missing "-"). JWT was on both times. (CONFIRMED)
   - **Fix:** remove the connector and add it again with the exact URL. Then open the connector page and re-read the saved URL. (CONFIRMED that the connector page shows the saved URL.)
-- **Cause 2: you used the "Salesforce - Beta" connector and H360 is inactive.** Fix: activate Headless360 (H360). (REPORTED in anthropics/claude-ai-mcp#933 and anthropics/claude-ai-mcp#495)
+- **Cause 2: the server in your URL is inactive.** We deactivated Headless360 (H360), then disconnected and connected our H360 connector: this exact pair of messages. Reactivating it fixed it. (CONFIRMED, 12 Oct 2026)
+  - **Fix:** Setup > Integrations > API Catalog > MCP Servers > open the server > Activate. Then reconnect.
+  - Users of the "Salesforce - Beta" directory connector report the same fix: activate H360. (REPORTED in anthropics/claude-ai-mcp#933 and anthropics/claude-ai-mcp#495)
+
+![Claude showing Connection issue after the server was deactivated](images/12-h360-inactive-couldnt-connect.jpg)
+
+*H360 deactivated in Salesforce: "Your account was authorized, but ... returned an error when connecting" and "Connection issue". A URL typo gives the same screen. Support reference blurred. (CONFIRMED, 12 Oct 2026)*
+
 - **Cause 3: the server is not active for this org, or the user lacks MCP access.** Anthropic traced older reports to Salesforce answering 404 or 405 on the first MCP call. Those reports showed older error wording. (REPORTED in anthropics/claude-ai-mcp#251 and anthropics/claude-ai-mcp#328)
 
 ### "Your connection to `<name>` stopped working. Reconnect to continue."
