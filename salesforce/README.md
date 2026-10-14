@@ -221,4 +221,4 @@ In October 2026 custom connectors sat under Customize > Connectors > Yours on cl
 
 ## If you'd rather I fix it
 
-I do this for a fixed price in your org, usually within 48 hours, and you don't pay if I can't fix it: [my Upwork offer](https://www.upwork.com/services/product/2109555434115908754). Or open an issue in this repo with the error text and I'll tell you what I think is wrong.
+I do this for a fixed price in your org, and you don't pay if I can't fix it: [my Upwork offer](https://www.upwork.com/services/product/2109555434115908754).
