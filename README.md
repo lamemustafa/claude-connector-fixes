@@ -1,18 +1,14 @@
 # Claude connector fixes
 
-Field-tested fixes for Claude custom connectors to enterprise MCP servers.
+Fixes I tested for Claude custom connectors, starting with Salesforce's hosted MCP server.
 
-Each guide lists the exact error Claude shows, its cause, and the fix. Every claim carries a label:
-
-- **CONFIRMED**: seen in our own live test, with the date.
-- **REPORTED**: reported in a public GitHub issue (linked). Not tested by us.
-- **UNTESTED**: plausible, not shown.
+Each guide lists the exact error Claude shows, its cause, and the fix, and says which fixes I saw work, which come from a linked public issue, and which I have not tested.
 
 ## Guides
 
 | System | Guide | Tested |
 |---|---|---|
-| Salesforce hosted MCP (Headless 360, SObject servers) | [salesforce/](salesforce/README.md) | 12 Oct 2026, Developer Edition org, claude.ai |
+| Salesforce hosted MCP (Headless 360) | [salesforce/](salesforce/README.md) | 12 Oct 2026, Developer Edition org, claude.ai |
 
 More systems will be added as we test them.
 
